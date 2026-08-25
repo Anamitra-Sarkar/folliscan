@@ -61,11 +61,20 @@ def serialize(df: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
+def _df_to_markdown(df: pd.DataFrame) -> str:
+    cols = list(df.columns)
+    lines = ["| " + " | ".join(cols) + " |",
+             "|" + "|".join(["---"] * len(cols)) + "|"]
+    for _, row in df.iterrows():
+        lines.append("| " + " | ".join(str(row[c]) for c in cols) + " |")
+    return "\n".join(lines)
+
+
 def write_dataset_card(out_dir: str, stats_df: pd.DataFrame, n_total: int,
                        split_sizes: tuple[int, int, int]) -> str:
     from ml.data.task_registry import TASK_REGISTRY
 
-    table = stats_df.to_markdown(index=False)
+    table = _df_to_markdown(stats_df)
     card = f"""---
 license: cc-by-4.0
 task_categories:

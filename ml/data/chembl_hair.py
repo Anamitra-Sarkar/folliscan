@@ -16,6 +16,7 @@ Tasks produced (task id -> rule):
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 import pandas as pd
@@ -84,18 +85,22 @@ def resolve_target_chembl_id(query: str) -> str | None:
     return best_id if best_score >= max(1, min(len(qkw), 2)) else None
 
 
-def fetch_target_activities(target_chembl_id: str, min_pchembl: float = 5.0,
+def fetch_target_activities(target_chembl_id: str, min_pchembl: float | None = 5.0,
                             max_records: int = 40000) -> pd.DataFrame:
-    """Paginated pull of pChEMBL-thresholded activities for one human target."""
+    """Paginated pull of activities for one human target. With
+    min_pchembl=None, ALL measured activities are pulled (including
+    inactive/unquantified records used as negative evidence)."""
     rows = []
     offset = 0
     page = 500
     while offset < max_records:
-        data = _get(f"{BASE}/activity.json", {
+        params = {
             "target_chembl_id": target_chembl_id,
-            "pchembl_value__gte": min_pchembl,
             "limit": page, "offset": offset,
-        })
+        }
+        if min_pchembl is not None:
+            params["pchembl_value__gte"] = min_pchembl
+        data = _get(f"{BASE}/activity.json", params)
         if not data:
             break
         acts = data.get("activities", [])
@@ -121,13 +126,76 @@ def fetch_target_activities(target_chembl_id: str, min_pchembl: float = 5.0,
     return keep
 
 
+def fetch_activities_for_assay_query(term: str, max_records: int = 40000) -> pd.DataFrame:
+    """Find ChEMBL assays by description keyword (e.g. 'Wnt', 'TCF/LEF reporter')
+    and pull every measured activity for them. Reporter-style endpoints are
+    pathway-level and are not attached to a single target."""
+    data = _get(f"{BASE}/assay.json", {"q": term, "limit": 25})
+    if not data or not data.get("assays"):
+        return pd.DataFrame()
+    frames = []
+    for a in data["assays"][:10]:
+        aid = a.get("assay_chembl_id")
+        if not aid:
+            continue
+        rows, offset, page = [], 0, 500
+        while offset < max_records:
+            d = _get(f"{BASE}/activity.json",
+                     {"assay_chembl_id": aid, "limit": page, "offset": offset})
+            if not d:
+                break
+            got = d.get("activities", [])
+            rows.extend(got)
+            offset += len(got)
+            if len(got) < page:
+                break
+        if rows:
+            frames.append(pd.DataFrame(rows))
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
+_UNITS_TO_MOLAR = {"pm": 1e-12, "nm": 1e-9, "um": 1e-6, "µm": 1e-6, "mm": 1e-3,
+                   "cm": None, "M": 1.0}
+
+
+def _estimate_pchembl(df: pd.DataFrame) -> pd.Series:
+    """Fallback pActivity = -log10(molar standard value) when ChEMBL has not
+    published a pchembl_value (common for functional antagonist assays)."""
+    import numpy as np
+
+    def one(row):
+        try:
+            if pd.notna(row.get("pchembl_value")):
+                return float(row["pchembl_value"])
+            rel = str(row.get("relation") or "=")
+            if rel not in ("=", "<", "~", ""):
+                return float("nan")   # '>', '>>' -> too weak / unquantified
+            val = float(row.get("standard_value"))
+            unit = str(row.get("standard_units") or "").strip().lower()
+            factor = _UNITS_TO_MOLAR.get(unit)
+            if factor is None or factor <= 0 or val <= 0:
+                return float("nan")
+            molar = val * factor
+            if molar >= 1:
+                return float("nan")
+            return -np.log10(molar)
+        except (TypeError, ValueError):
+            return float("nan")
+
+    return df.apply(one, axis=1)
+
+
 def _consensus_labels(acts: pd.DataFrame, threshold: float,
                       assay_must_contain: str | None = None) -> pd.DataFrame:
-    """Molecule-level consensus: positive if any qualifying measurement passes;
-    negative only if measurements exist but none pass (conflicts -> majority)."""
+    """Molecule-level consensus over activity records.
+
+    A measurement votes positive when pChEMBL >= threshold. Records without a
+    pChEMBL value (tested but unquantified/inactive) vote negative. Molecules
+    are positive on majority-positive votes (ties -> positive).
+    """
     a = acts.copy()
-    a["pchembl_value"] = pd.to_numeric(a["pchembl_value"], errors="coerce")
-    a = a.dropna(subset=["pchembl_value"])
     if assay_must_contain:
         mask = a["assay_description"].str.contains(
             assay_must_contain, case=False, na=False)
@@ -136,10 +204,13 @@ def _consensus_labels(acts: pd.DataFrame, threshold: float,
         return pd.DataFrame(columns=["smiles", "label"])
     a["smiles"] = a["canonical_smiles"].map(strip_salts)
     a = a.dropna(subset=["smiles"])
-    agg = a.groupby("smiles")["pchembl_value"].apply(lambda s: (s >= threshold).mean())
-    out = agg.reset_index().rename(columns={"pchembl_value": "frac_positive"})
-    out["label"] = (out["frac_positive"] > 0.5).astype(int)
-    return out[["smiles", "label"]]
+    a["pchembl_num"] = pd.to_numeric(a.get("pchembl_value"), errors="coerce")
+    est = _estimate_pchembl(a)
+    a["effective_p"] = a["pchembl_num"].fillna(est)
+    a["vote_pos"] = a["effective_p"].fillna(0.0) >= threshold
+    agg = a.groupby("smiles")["vote_pos"].mean().reset_index(name="frac_positive")
+    agg["label"] = (agg["frac_positive"] > 0.5).astype(int)
+    return agg[["smiles", "label"]]
 
 
 # Literature-curated hair-growth positives (peer-reviewed evidence of scalp-hair
@@ -206,15 +277,22 @@ def literature_hair_growth_set() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def build_hair_tasks(max_records_per_target: int = 40000) -> dict[str, pd.DataFrame]:
+def build_hair_tasks(max_records_per_target: int | None = None) -> dict[str, pd.DataFrame]:
     """Returns {task_id: DataFrame(smiles,label)} for all six hair tasks."""
+    if max_records_per_target is None:
+        max_records_per_target = int(os.environ.get("FOLLISCAN_MAX_RECORDS", "40000"))
     specs = [
         ("SULT1A1_active", ["cytosolic sulfotransferase 1A1", "SULT1A1"], 5.0, None),
         ("SRD5A1_inhibitor", ["steroid 5-alpha reductase 1", "testosterone 5-alpha reductase"], 5.0, None),
-        ("AR_antagonist", ["androgen receptor"], 6.0, "antagon"),
+        # functional AR assays: antagonists/inhibitors/blockers of AR signalling
+        ("AR_antagonist", ["androgen receptor"], 6.0, "antagon|inhibit|block"),
         ("Wnt_bcatenin_activator", ["beta-catenin"], 5.0, None),
         ("FGF7_KGF_active", ["keratinocyte growth factor", "fibroblast growth factor receptor 2"], 5.0, None),
     ]
+    assay_search = {
+        "AR_antagonist": ["androgen receptor antagonist"],
+        "Wnt_bcatenin_activator": ["Wnt beta-catenin pathway", "TCF LEF reporter Wnt"],
+    }
     out: dict[str, pd.DataFrame] = {}
     for task_id, queries, thr, assay_kw in specs:
         frames = []
@@ -224,8 +302,16 @@ def build_hair_tasks(max_records_per_target: int = 40000) -> dict[str, pd.DataFr
                 log.warning("no ChEMBL target resolved for %r", q)
                 continue
             log.info("task=%s query=%r -> %s", task_id, q, tid)
-            acts = fetch_target_activities(tid, min_pchembl=thr, max_records=max_records_per_target)
+            acts = fetch_target_activities(tid, min_pchembl=None,
+                                           max_records=max_records_per_target)
             if not acts.empty:
+                frames.append(acts)
+        for term in assay_search.get(task_id, []):
+            acts = fetch_activities_for_assay_query(term,
+                                                    max_records=max_records_per_target)
+            if not acts.empty:
+                log.info("task=%s assay-search=%r -> %d records",
+                         task_id, term, len(acts))
                 frames.append(acts)
         if not frames:
             out[task_id] = pd.DataFrame(columns=["smiles", "label"])

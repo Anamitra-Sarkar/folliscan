@@ -15,16 +15,19 @@ def test_masked_bce_ignores_unmasked():
 
 
 def test_pinn_penalty_pushes_against_alert_contradiction():
-    # alert fires; model predicts low hazard -> positive penalty
-    probs_low = torch.tensor([[0.9, 0.9, 0.05]])
+    # alert fires; model predicts low hazard on constrained tox tasks -> positive penalty
     flags = [{"mutagenicity_alert": True, "sensitization_alert": False,
               "irritancy_alert": False, "cosing_alert": False}]
+    probs_low = torch.full((1, 21), 0.9)
+    probs_low[0, 14] = 0.05   # SR-p53
+    probs_low[0, 15] = 0.05   # SR-ATAD5
     pen_low = pinn_penalty(probs_low, flags)
-    # model predicts high hazard on constrained tox tasks -> ~zero penalty
-    probs_high = torch.tensor([[0.9, 0.9, 0.95]])
+
+    probs_high = torch.full((1, 21), 0.95)   # hazard predicted everywhere
     pen_high = pinn_penalty(probs_high, flags)
     assert pen_low.item() > 0
     assert pen_high.item() < pen_low.item()
+    assert pen_high.item() == pytest.approx(0.0, abs=1e-6)
 
 
 def test_folliscan_loss_combines_terms():
@@ -40,7 +43,7 @@ def test_folliscan_loss_combines_terms():
 
 def test_conformal_coverage_near_nominal():
     rng = np.random.default_rng(0)
-    cal = ConformalCalibrator(alpha=0.1)
+    cal = ConformalCalibrator(alpha=0.1, n_tasks=3)
     probs = rng.random((2000, 3))
     labels = (rng.random((2000, 3)) < probs).astype(float)
     mask = np.ones((2000, 3))

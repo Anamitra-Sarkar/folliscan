@@ -45,12 +45,16 @@ class FolliscanNet(nn.Module):
         )
         self.motif_encoder = MotifEncoder(cfg["dim"], dropout=cfg["dropout"])
         self.pathway_module = PathwayModule(cfg["dim"], dropout=cfg["dropout"])
-        z_dim = 2 * cfg["dim"] + cfg["dim"] + cfg["dim"]
-        self.heads = GroupHeads(z_dim, hidden=cfg["trunk_hidden"],
-                                n_tasks=cfg["n_tasks"], dropout=cfg["head_dropout"])
         # Ablation switches (pipeline 03); defaults keep the full architecture.
         self.use_sme = bool(cfg.get("use_sme", True))
         self.use_pathway = bool(cfg.get("use_pathway", True))
+        z_dim = 2 * cfg["dim"]
+        if self.use_sme:
+            z_dim += cfg["dim"]
+        if self.use_pathway:
+            z_dim += cfg["dim"]
+        self.heads = GroupHeads(z_dim, hidden=cfg["trunk_hidden"],
+                                n_tasks=cfg["n_tasks"], dropout=cfg["head_dropout"])
 
     def forward(self, data, motif_multihot: torch.Tensor) -> dict:
         """data: PyG batch with x/edge_index/edge_attr/batch.

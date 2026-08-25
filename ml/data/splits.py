@@ -49,9 +49,9 @@ def scaffold_split(df: pd.DataFrame, smiles_col: str = "smiles", seed: int = 42)
     test = df[folds == 9].reset_index(drop=True)
 
     # Sanity: no key may appear in more than one split.
-    kt = {keys[i] for i in train.index}
-    kv = {keys[i] for i in val.index}
-    ke = {keys[i] for i in test.index}
+    kt = {k for k, f in zip(keys, folds) if f < 8}
+    kv = {k for k, f in zip(keys, folds) if f == 8}
+    ke = {k for k, f in zip(keys, folds) if f == 9}
     assert not (kt & kv or kt & ke or kv & ke), "scaffold leakage"
 
     out_dfs = []

@@ -29,7 +29,6 @@ image = (
         "scikit-learn>=1.4",
         "huggingface_hub>=0.23",
         "requests>=2.31",
-        "tabulate>=0.9",
     )
     .add_local_dir(os.path.join(ROOT, "ml"), remote_path="/root/folliscan/ml")
     .add_local_dir(os.path.join(ROOT, "pipelines"), remote_path="/root/folliscan/pipelines")

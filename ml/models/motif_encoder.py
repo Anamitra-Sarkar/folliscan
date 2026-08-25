@@ -23,6 +23,7 @@ class MotifEncoder(nn.Module):
 
     def forward(self, multihot: torch.Tensor):
         """multihot: [B, M] float -> (motif_vec [B, dim], contributions [B, M])"""
+        multihot = multihot.to(torch.float32)
         idx = multihot.nonzero(as_tuple=False)                     # [K, 2] (batch, motif)
         B = multihot.size(0)
         if idx.numel() == 0:
