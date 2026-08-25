@@ -22,7 +22,7 @@ def build_master_dataset(task_dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
     votes: dict[str, list[list[int]]] = {}
 
     def add(smiles: str, task_id: str, label: int):
-        slot = votes.setdefault(smiles, [[0, 0]] * n_tasks)  # type: ignore[assignment]
+        slot = votes.setdefault(smiles, [[0, 0] for _ in range(n_tasks)])
         v = slot[idx_of[task_id]]
         v[label] += 1
 
@@ -34,12 +34,13 @@ def build_master_dataset(task_dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
     rows = []
     for smiles, slots in votes.items():
         labels, mask = [], []
-        for pos_v, neg_v in slots:
+        # each slot is [votes_for_label_0, votes_for_label_1]
+        for neg_v, pos_v in slots:
             if pos_v + neg_v == 0:
                 labels.append(-1.0)
                 mask.append(0)
             else:
-                labels.append(float(pos_v >= neg_v))
+                labels.append(float(pos_v > neg_v))
                 mask.append(1)
         rows.append({"smiles": smiles, "labels": labels, "mask": mask})
     return pd.DataFrame(rows).sort_values("smiles").reset_index(drop=True)

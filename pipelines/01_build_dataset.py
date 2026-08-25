@@ -124,7 +124,8 @@ def push_to_hub(out_dir: str, repo_id: str):
     api = HfApi(token=token)
     api.create_repo(repo_id, repo_type="dataset", exist_ok=True, private=False)
     for fn in os.listdir(out_dir):
-        api.upload_file(os.path.join(out_dir, fn), fn, repo_id, repo_type="dataset",
+        api.upload_file(path_or_fileobj=os.path.join(out_dir, fn),
+                        path_in_repo=fn, repo_id=repo_id, repo_type="dataset",
                         commit_message=f"add {fn}")
     log.info("uploaded dataset to https://huggingface.co/datasets/%s", repo_id)
     return True
