@@ -41,8 +41,12 @@ jobs:
 
       - name: Trigger Render deploy
         run: |
-          code=$(curl -s -o /tmp/render_resp.txt -w "%{http_code}" -X POST "$RENDER_DEPLOY_HOOK" -d '{}')
-          echo "render hook status: $code"; cat /tmp/render_resp.txt
-          test "$code" = "200" || test "$code" = "201"
+          code=$(curl -s -o /tmp/render_resp.txt -w "%{http_code}" \
+            -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" -d '{}')
+          echo "render deploy status: $code"; cat /tmp/render_resp.txt; echo
+          test "$code" = "201" || test "$code" = "200"
         env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
