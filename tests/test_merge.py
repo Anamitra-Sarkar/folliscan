@@ -15,8 +15,12 @@ def _master():
     })
 
 
+def _row(df, smiles):
+    return df[df["smiles"] == smiles].iloc[0]
+
+
 def test_tasks_do_not_bleed_votes():
-    r = _master().iloc[0]
+    r = _row(_master(), "CCO")
     assert r["labels"][TASK_INDEX["SULT1A1_active"]] == 1.0   # positive vote kept here
     assert r["labels"][TASK_INDEX["NR-AR"]] == 0.0            # negative here
     assert all(r["mask"][i] == 0 for i in range(21)
@@ -24,14 +28,13 @@ def test_tasks_do_not_bleed_votes():
 
 
 def test_majority_vote_and_mask():
-    df = _master()
-    ccc = df[df["smiles"] == "CCC"].iloc[0]
+    ccc = _row(_master(), "CCC")
     # SRD5A1: 2 negatives vs 1 positive -> negative label with mask=1
     assert ccc["mask"][TASK_INDEX["SRD5A1_inhibitor"]] == 1
     assert ccc["labels"][TASK_INDEX["SRD5A1_inhibitor"]] == 0.0
 
 
 def test_unlabelled_sentinel():
-    r = _master().iloc[0]
+    r = _row(_master(), "CCO")
     assert r["labels"][TASK_INDEX["skin_sensitizer"]] == -1.0
     assert r["mask"][TASK_INDEX["skin_sensitizer"]] == 0
