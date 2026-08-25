@@ -5,7 +5,6 @@ environment variables into the Modal container. They are never written into
 this repo. Run:  python3 infra/run_training_modal.py [--quick] [--skip-ablations]
 """
 
-import argparse
 import base64
 import json
 import os
@@ -78,28 +77,23 @@ def run_pipeline(script: str, env: dict, extra_env: dict | None = None):
 
 
 @app.local_entrypoint()
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--quick", action="store_true", help="reduced epochs / smoke run")
-    ap.add_argument("--skip-dataset", action="store_true", help="reuse existing HF dataset")
-    ap.add_argument("--skip-train", action="store_true")
-    ap.add_argument("--skip-ablations", action="store_true")
-    args = ap.parse_args()
-
+def main(quick: bool = False, epochs: int = 45,
+         skip_dataset: bool = False, skip_train: bool = False,
+         skip_ablations: bool = False):
     env = _load_runtime_env()
     print("launching on Modal with model repo:", env["HF_MODEL_REPO"])
 
-    if not args.skip_dataset:
+    if not skip_dataset:
         run_pipeline.remote("01_build_dataset.py", env)
 
-    train_extra = {}
-    ablation_extra = {}
-    if args.quick:
+    train_extra = {"EPOCHS": str(epochs)}
+    ablation_extra = {"EPOCHS": str(max(8, epochs // 3))}
+    if quick:
         train_extra["EPOCHS"] = "12"
         ablation_extra["EPOCHS"] = "12"
         ablation_extra["ABLATION_QUICK"] = "1"
 
-    if not args.skip_train:
+    if not skip_train:
         print(run_pipeline.remote("02_train_model.py", env, train_extra))
-    if not args.skip_ablations:
+    if not skip_ablations:
         print(run_pipeline.remote("03_evaluate_ablation.py", env, ablation_extra))
