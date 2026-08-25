@@ -1,0 +1,53 @@
+name: Republish user-api image public
+
+on:
+  workflow_dispatch:
+
+jobs:
+  republish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # remove all existing versions -> package disappears entirely
+      - name: Delete existing package versions
+        uses: smartsquaregmbh/delete-old-packages@v0.8
+        continue-on-error: true
+        with:
+          type: container
+          owner: ${{ github.repository_owner }}
+          package: folliscan-user-api
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: services/user-api
+          push: true
+          tags: |
+            ghcr.io/anamitra-sarkar/folliscan-user-api:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=Folliscan user profile/history API
+
+      - name: Verify anonymous pull
+        run: |
+          TOKEN=$(curl -s "https://ghcr.io/token?scope=repository%3Aanamitra-sarkar%2Ffolliscan-user-api%3Apull&service=ghcr.io" | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('token',''))")
+          if [ -z "$TOKEN" ]; then echo "STILL PRIVATE"; exit 1; fi
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.index.v1+json" \
+            "https://ghcr.io/v2/anamitra-sarkar/folliscan-user-api/manifests/latest")
+          echo "anon manifest: $CODE"
+          test "$CODE" = "200"
