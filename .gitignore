@@ -1,0 +1,26 @@
+# secrets & credentials
+.env
+.env.*
+*.key
+service-account*.json
+*firebase-adminsdk*
+kaggle.json
+**/credentials/**
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+# node
+node_modules/
+.next/
+out/
+.vercel/
+# misc
+.DS_Store
+*.log
+.ipynb_checkpoints/
