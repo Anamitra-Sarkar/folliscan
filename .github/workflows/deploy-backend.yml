@@ -22,6 +22,18 @@ jobs:
           cp -r backend/* space_deploy/
           cp -r ml space_deploy/ml
           rm -rf space_deploy/ml/__pycache__ space_deploy/ml/*/__pycache__
+          cat > space_deploy/README.md <<EOF
+          ---
+          title: Folliscan API
+          emoji: 🧬
+          colorFrom: green
+          colorTo: red
+          sdk: docker
+          app_port: 7860
+          pinned: false
+          ---
+          Folliscan inference API (synced from GitHub).
+          EOF
       - name: Push to HuggingFace Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
