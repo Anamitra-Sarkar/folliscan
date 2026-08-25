@@ -32,6 +32,5 @@ jobs:
           git init -b main
           git add -A
           git -c user.name="ci" -c user.email="ci@folliscan.dev" commit -m "sync from GitHub ${GITHUB_SHA::7}"
-          git remote add space https://user:$HF_TOKEN@huggingface.co/spaces/$HF_SPACE_ID
-          git push force space main
-        # HF_SPACE_ID is a repo-level variable, e.g. <username>/folliscan-api
+          git remote add space "https://api:$HF_TOKEN@huggingface.co/spaces/$HF_SPACE_ID" 2>/dev/null || true
+          git push --force space main
