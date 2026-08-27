@@ -7,4 +7,4 @@
 - [x] Add a committed non-interactive frontend lint configuration so quality verification cannot stall on an ESLint setup prompt.
 - [x] Review and safely remediate FolliScan’s production dependency advisories through controlled compatible upgrades; do not use forced automated upgrades.
 - [x] Migrate the unchanged protected-route guard from Next’s deprecated middleware convention to the supported proxy convention after the controlled Next 16 upgrade.
-- [ ] Deploy and reverify the canonical FolliScan public landing page, protected-route redirect, and no-model boundary after the frontend correction.
+- [x] Deploy and reverify the canonical FolliScan public landing page, protected-route redirect, and no-model boundary after the frontend correction.
