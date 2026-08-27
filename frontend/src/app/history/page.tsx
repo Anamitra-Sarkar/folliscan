@@ -42,8 +42,25 @@ function HistoryInner() {
   }
 
   useEffect(() => {
-    void load(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let active = true;
+
+    void listHistory(20)
+      .then((r) => {
+        if (!active) return;
+        setItems(r.items);
+        setCursor(r.next_cursor);
+        setHasMore(Boolean(r.next_cursor));
+      })
+      .catch((e: unknown) => {
+        if (active) toast.error((e as Error).message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function remove(id: string) {

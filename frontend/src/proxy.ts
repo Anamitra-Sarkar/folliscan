@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * server-side via Firebase ID-token verification in the APIs. */
 const PROTECTED = ["/dashboard", "/history"];
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const hasSession = req.cookies.get("folliscan_session")?.value;
 

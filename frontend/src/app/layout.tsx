@@ -11,9 +11,9 @@ const fraunces = Fraunces({
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Folliscan — Cosmetic ingredient intelligence",
+  title: "FolliScan — Ingredient research workspace",
   description:
-    "Multi-task graph neural network screening of hair-health activity, toxicity and cosmetic safety, with uncertainty-aware predictions and mechanistic explanations.",
+    "A protected research workspace for cosmetic ingredient evidence, limitations, and expert review. No model result is available without an approved release artifact.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
