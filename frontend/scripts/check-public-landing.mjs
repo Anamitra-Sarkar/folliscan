@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
+// This runs inside `npm run build` so deployment cannot ship the former
+// indefinite loading shell or imply live model availability.
 const sourcePath = fileURLToPath(new URL("../src/app/page.tsx", import.meta.url));
 const source = await readFile(sourcePath, "utf8");
 
