@@ -10,6 +10,12 @@
 | Model artifacts | https://huggingface.co/bhumika-tewari-282006/folliscan-model |
 | Dataset | https://huggingface.co/bhumika-tewari-282006/folliscan-data |
 
+## Verified runtime status — 2026-08-27
+
+The Hugging Face inference endpoint returned HTTP 200 for `GET /health` with the complete JSON payload `{"status":"ok","model_loaded":false}` both with and without a Hub bearer token. This confirms the public liveness contract is functioning; it does **not** indicate model availability. The authenticated `/predict` route must continue to return an unavailable response while `model_loaded` is false, and no prediction, model-performance, or clinical-use claim may be made from this runtime state.
+
+The earlier empty-body observation was a silent-request artifact rather than a missing endpoint. The next permitted operational action is to load only a reviewed, provenance-pinned model artifact through the documented Space configuration, then retest authenticated prediction and abstention behavior. Do not substitute a fixture model or synthetic result to make the service appear ready.
+
 ## CI/CD (all path-filtered, trigger on push to `main`)
 
 | Workflow | Fires on | Action |
