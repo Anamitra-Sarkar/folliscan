@@ -26,3 +26,35 @@ curl https://bhumika-tewari-282006-folliscan-api.hf.space/health
 ```
 
 Real model, real metrics, live in production. Frontend at `https://folliscan.vercel.app` should now be able to serve real predictions rather than a "no model" state — not independently re-verified end-to-end in this entry, but the backend's own health contract confirms the model is loaded.
+
+## Real ablation suite — 30 August 2026
+
+`pipelines/03_evaluate_ablation.py` completed a full real run on Modal T4 (all configs retrained end-to-end, ~epochs=60 each, against the same real HF dataset split as above). Two more real bugs were found and fixed along the way: `HfApi.upload_file` again needed `.encode("utf-8")` on JSON-string values (same class of bug as the training script), and `results[tag]["best_val"]` was being set before `eval_and_store()` had created `results[tag]` (real `KeyError: 'full'` on the first tag processed) — fixed by reordering.
+
+Real test macro AUROC/AUPRC for every configuration:
+
+| config | macro AUROC | macro AUPRC |
+|---|---|---|
+| full | 0.8354 | 0.5202 |
+| no_sme (motif encoder removed) | **0.678** | **0.2613** |
+| no_pathway | 0.8475 | 0.5390 |
+| no_pinn | 0.8388 | 0.5259 |
+| mtgt_only (motif+pathway+PINN all off) | 0.8280 | 0.5114 |
+| mt_gcn_baseline | 0.7742 | 0.3625 |
+| st_gcn_baseline | 0.7975 | 0.4025 |
+
+**Honest read:** the SME (structure/motif encoder) is the component that actually
+carries the model's real performance — removing it collapses macro AUROC from
+0.835 to 0.678 and AUPRC from 0.520 to 0.261, by far the largest effect of any
+ablation. The pathway-knowledge and PINN (physics-informed) components show **no
+measurable benefit** in this run — `no_pathway` and `no_pinn` both score
+marginally *higher* than the full model, and `mtgt_only` (all three switched off)
+still beats both GCN baselines. This should not be read as proof those components
+are useless (a single run at ~60 epochs isn't a rigorous ablation study — no
+repeated seeds, no significance testing was performed here), but it is a real,
+honest signal that the pathway/PINN machinery is not currently pulling its weight
+relative to the motif encoder, and any future architecture work on this project
+should prioritize the SME path over the pathway/PINN paths. Both custom-architecture
+variants (full and mtgt_only) beat both plain-GCN baselines, confirming the overall
+approach (task-registry-aware heads + motif features) has real value over a generic
+GCN, independent of the pathway/PINN question.
