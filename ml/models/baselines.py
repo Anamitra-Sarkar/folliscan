@@ -35,6 +35,11 @@ class MultiTaskGCN(_GCNBase):
         super().__init__(**kw)
         self.head = nn.Sequential(nn.Linear(kw.get("dim", 128), 256), nn.GELU(),
                                   nn.Dropout(0.2), nn.Linear(256, 21))
+        # Trainer._state_blob() does **self.model.config -- real crash on a
+        # live ablation run (AttributeError: 'MultiTaskGCN' object has no
+        # attribute 'config') since these baselines were never given one.
+        self.config = {"dim": kw.get("dim", 128), "n_layers": kw.get("n_layers", 3),
+                       "dropout": kw.get("dropout", 0.2), "model": "MultiTaskGCN"}
 
     def forward(self, data, multihot=None):
         return {"logits": self.head(self.encode(data)), "motif_contrib": None,
@@ -49,6 +54,7 @@ class SingleTaskGCN(nn.Module):
         dim = kw.get("dim", 128)
         self.nets = nn.ModuleDict({g: MultiTaskGCN(dim=dim) for g in GROUP_INDICES})
         self.slices = GROUP_INDICES
+        self.config = {"dim": dim, "model": "SingleTaskGCN", "n_task_groups": len(GROUP_INDICES)}
 
     def forward(self, data, multihot=None):
         logits = torch.zeros(data.num_graphs, 21, device=data.x.device)
