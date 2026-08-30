@@ -66,8 +66,11 @@ def run():
                      TrainConfig(epochs=epochs, batch_size=256, lr=3e-4,
                                  hf_model_repo=model_repo, seed=42, run_tag=tag, **kw))
         res = tr.run()
-        results[tag]["best_val"] = res["best_val_macro_auroc"]
+        # eval_and_store() is what actually creates results[tag] (= {"summary": rep});
+        # the old order set results[tag]["best_val"] first, on a key that didn't
+        # exist yet (real crash: KeyError: 'full', the first tag processed).
         eval_and_store(tr, tag)
+        results[tag]["best_val"] = res["best_val_macro_auroc"]
 
     # GCN baselines reuse the Trainer harness with swapped model classes
     for name, cls in [("mt_gcn_baseline", MultiTaskGCN), ("st_gcn_baseline", SingleTaskGCN)]:
@@ -79,8 +82,8 @@ def run():
         tr.opt = torch.optim.AdamW(tr.model.parameters(), lr=tr.cfg.lr,
                                    weight_decay=tr.cfg.weight_decay)
         res = tr.run()
-        results[name]["best_val"] = res["best_val_macro_auroc"]
         eval_and_store(tr, name)
+        results[name]["best_val"] = res["best_val_macro_auroc"]
 
     # ---- statistics ----
     pf, yf, mf = test_preds["full"]
