@@ -13,8 +13,8 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from torch_geometric.loader import DataLoader as PyGLoader
 
 from ml.data.featurize import smiles_to_graph
 from ml.data.motifs import match_motifs, motif_multihot, N_MOTIFS
@@ -108,17 +108,24 @@ class Trainer:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         # MoleculeTaskDataset.__getitem__ returns a dict, not a torch_geometric
-        # Data object, so PyG's DataLoader default collation doesn't apply --
-        # without collate_fn=collate here, the loader silently falls back to
-        # a dict-of-batched-values, and `for g, mo, y, m in loader` unpacks
-        # its KEYS ("graph", "labels", "mask", "motifs") instead of values,
-        # so g ends up being the literal string "graph" (real crash: 'str'
-        # object has no attribute 'to' at g.to(self.device)).
-        self.train_loader = PyGLoader(MoleculeTaskDataset(train_df), batch_size=cfg.batch_size,
+        # Data object. The original code used torch_geometric.loader.DataLoader,
+        # which silently DISCARDS any collate_fn passed to it (its __init__ does
+        # `kwargs.pop('collate_fn', None)` and always substitutes its own
+        # Collater -- confirmed by reading the installed 2.8.0 source directly,
+        # a first attempted fix that only added collate_fn= here reproduced the
+        # exact same crash). Its own default Collater falls back to batching a
+        # dict as a dict-of-batched-values, and `for g, mo, y, m in loader`
+        # unpacks that dict's KEYS ("graph", "labels", "mask", "motifs") instead
+        # of values, so g ends up being the literal string "graph" ('str' object
+        # has no attribute 'to' at g.to(self.device)). Real fix: use plain
+        # torch.utils.data.DataLoader, which does respect collate_fn -- our
+        # own collate() already handles the graph batching manually via
+        # Batch.from_data_list.
+        self.train_loader = DataLoader(MoleculeTaskDataset(train_df), batch_size=cfg.batch_size,
                                       shuffle=True, num_workers=cfg.num_workers, collate_fn=collate)
-        self.val_loader = PyGLoader(MoleculeTaskDataset(val_df), batch_size=cfg.batch_size * 2,
+        self.val_loader = DataLoader(MoleculeTaskDataset(val_df), batch_size=cfg.batch_size * 2,
                                     shuffle=False, num_workers=cfg.num_workers, collate_fn=collate)
-        self.test_loader = PyGLoader(MoleculeTaskDataset(test_df), batch_size=cfg.batch_size * 2,
+        self.test_loader = DataLoader(MoleculeTaskDataset(test_df), batch_size=cfg.batch_size * 2,
                                      shuffle=False, num_workers=cfg.num_workers, collate_fn=collate)
 
         model_cfg = {"use_sme": cfg.use_sme, "use_pathway": cfg.use_pathway}
