@@ -107,12 +107,19 @@ class Trainer:
         self.cfg = cfg
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
+        # MoleculeTaskDataset.__getitem__ returns a dict, not a torch_geometric
+        # Data object, so PyG's DataLoader default collation doesn't apply --
+        # without collate_fn=collate here, the loader silently falls back to
+        # a dict-of-batched-values, and `for g, mo, y, m in loader` unpacks
+        # its KEYS ("graph", "labels", "mask", "motifs") instead of values,
+        # so g ends up being the literal string "graph" (real crash: 'str'
+        # object has no attribute 'to' at g.to(self.device)).
         self.train_loader = PyGLoader(MoleculeTaskDataset(train_df), batch_size=cfg.batch_size,
-                                      shuffle=True, num_workers=cfg.num_workers)
+                                      shuffle=True, num_workers=cfg.num_workers, collate_fn=collate)
         self.val_loader = PyGLoader(MoleculeTaskDataset(val_df), batch_size=cfg.batch_size * 2,
-                                    shuffle=False, num_workers=cfg.num_workers)
+                                    shuffle=False, num_workers=cfg.num_workers, collate_fn=collate)
         self.test_loader = PyGLoader(MoleculeTaskDataset(test_df), batch_size=cfg.batch_size * 2,
-                                     shuffle=False, num_workers=cfg.num_workers)
+                                     shuffle=False, num_workers=cfg.num_workers, collate_fn=collate)
 
         model_cfg = {"use_sme": cfg.use_sme, "use_pathway": cfg.use_pathway}
         model_cfg.update(model_config_overrides or {})
