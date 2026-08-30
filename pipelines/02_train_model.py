@@ -65,11 +65,15 @@ def main():
         "state_dict": trainer.model.state_dict(),
         "config": {**trainer.model.config, "use_sme": True, "use_pathway": True},
     }, buf)
+    # HfApi.upload_file's path_or_fileobj treats a plain str as a LOCAL FILE
+    # PATH, not literal content -- real crash on a live run: "Provided path:
+    # '{"alpha": 0.05, ...}' is not a file on the local file system". Encode
+    # every JSON string to bytes; model.pt was already fine (BytesIO bytes).
     files = {
         "model.pt": buf.getvalue(),
-        "calib.json": json.dumps(out["calib"].to_dict()),
-        "metrics.json": json.dumps(metrics, indent=2),
-        "config.json": json.dumps(trainer.model.config, indent=2),
+        "calib.json": json.dumps(out["calib"].to_dict()).encode("utf-8"),
+        "metrics.json": json.dumps(metrics, indent=2).encode("utf-8"),
+        "config.json": json.dumps(trainer.model.config, indent=2).encode("utf-8"),
     }
     for name, blob in files.items():
         api.upload_file(path_or_fileobj=blob, path_in_repo=name, repo_id=model_repo,
