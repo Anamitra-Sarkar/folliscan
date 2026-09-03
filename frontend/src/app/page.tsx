@@ -15,6 +15,14 @@ export default function Home() {
           Researcher sign in
         </Link>
       </header>
+      <section aria-label="Hero illustration">
+        <img
+          src="/hero.png"
+          alt="Abstract illustration of a hair follicle cross-section transitioning into a molecular graph of genes and metabolites"
+          style={{ width: '100%', maxWidth: '1100px', maxHeight: '300px', objectFit: 'cover', display: 'block', margin: '0 auto', borderRadius: 12 }}
+          loading="eager"
+        />
+      </section>
 
       <section className="mx-auto grid max-w-6xl gap-12 px-5 pb-16 pt-10 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:pb-24 lg:pt-16">
         <div className="max-w-2xl">
